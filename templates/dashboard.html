@@ -1,0 +1,281 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Fish Market Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f6f6;
+            color: #1c2128;
+        }
+
+        header {
+            background: #0e3b3d;
+            color: white;
+            padding: 22px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 23px;
+        }
+
+        select {
+            padding: 9px 14px;
+            border-radius: 6px;
+            border: none;
+        }
+
+        main {
+            padding: 25px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .stat {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,.06);
+        }
+
+        .angka {
+            font-size: 30px;
+            font-weight: bold;
+            color: #0f8f7e;
+            margin-bottom: 8px;
+        }
+
+        h2 {
+            font-size: 16px;
+            margin: 0 0 18px;
+        }
+
+        .grafik {
+            height: 300px;
+            position: relative;
+        }
+
+        .lebar {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 700px) {
+            main {
+                grid-template-columns: 1fr;
+                padding: 15px;
+            }
+
+            .stat {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .lebar, .stat {
+                grid-column: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <div>
+        <h1>Fish Market Data Dashboard</h1>
+        <p>Visualisasi dan Analisis Dataset Ikan</p>
+    </div>
+
+    <label>
+        Species:
+        <select id="species">
+            <option value="">Semua Spesies</option>
+
+            {% for s in species_list %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</header>
+
+<main>
+
+    <section class="stat">
+        <div class="card">
+            <div class="angka" id="total">-</div>
+            Total Data Ikan
+        </div>
+
+        <div class="card">
+            <div class="angka" id="spesies">-</div>
+            Jumlah Spesies
+        </div>
+
+        <div class="card">
+            <div class="angka" id="rata">-</div>
+            Rata-rata Berat
+        </div>
+
+        <div class="card">
+            <div class="angka" id="maksimum">-</div>
+            Berat Maksimum
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Rata-rata Berat Berdasarkan Spesies</h2>
+        <div class="grafik">
+            <canvas id="grafikBerat"></canvas>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Hubungan Panjang dan Berat Ikan</h2>
+        <div class="grafik">
+            <canvas id="grafikScatter"></canvas>
+        </div>
+    </section>
+
+    <section class="card lebar">
+        <h2>Perbandingan Karakteristik Ukuran Ikan</h2>
+        <div class="grafik">
+            <canvas id="grafikUkuran"></canvas>
+        </div>
+    </section>
+
+</main>
+
+<script>
+
+Chart.defaults.maintainAspectRatio = false;
+
+const charts = {};
+
+function gambar(id, config) {
+    if (charts[id]) {
+        charts[id].destroy();
+    }
+
+    charts[id] = new Chart(
+        document.getElementById(id),
+        config
+    );
+}
+
+async function muatData() {
+
+    const species = document.getElementById("species").value;
+
+    const q = species
+        ? "?species=" + encodeURIComponent(species)
+        : "";
+
+    // Ringkasan
+    const ringkasan = await (
+        await fetch("/api/ringkasan" + q)
+    ).json();
+
+    document.getElementById("total").textContent =
+        ringkasan.total_ikan;
+
+    document.getElementById("spesies").textContent =
+        ringkasan.jumlah_spesies;
+
+    document.getElementById("rata").textContent =
+        ringkasan.rata_berat;
+
+    document.getElementById("maksimum").textContent =
+        ringkasan.berat_maksimum;
+
+    // Grafik rata-rata berat
+    const berat = await (
+        await fetch("/api/berat-spesies" + q)
+    ).json();
+
+    gambar("grafikBerat", {
+        type: "bar",
+        data: {
+            labels: berat.labels,
+            datasets: [{
+                label: "Rata-rata Berat",
+                data: berat.data,
+                backgroundColor: "#0f8f7e"
+            }]
+        }
+    });
+
+    // Grafik scatter
+    const scatter = await (
+        await fetch("/api/panjang-berat" + q)
+    ).json();
+
+    gambar("grafikScatter", {
+        type: "scatter",
+        data: {
+            datasets: scatter.datasets
+        },
+        options: {
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: "Length1"
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: "Weight"
+                    }
+                }
+            }
+        }
+    });
+
+    // Grafik karakteristik ukuran
+    const ukuran = await (
+        await fetch("/api/ukuran-ikan" + q)
+    ).json();
+
+    gambar("grafikUkuran", {
+        type: "line",
+        data: {
+            labels: ukuran.labels,
+            datasets: ukuran.datasets
+        }
+    });
+}
+
+document.getElementById("species")
+    .addEventListener("change", muatData);
+
+muatData();
+
+</script>
+
+</body>
+</html>
